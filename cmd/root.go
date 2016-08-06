@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/ChrisMcKenzie/Styx/config"
+	"github.com/ChrisMcKenzie/Styx/exec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -22,6 +23,9 @@ var RootCmd = &cobra.Command{
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) == 0 {
+			return
+		}
 		file, err := ioutil.ReadFile("./.styx.hcl")
 		if err != nil {
 			log.Fatal(err)
@@ -29,7 +33,15 @@ var RootCmd = &cobra.Command{
 
 		ctx, err := config.LoadHclContext(file)
 		c, _ := ctx.Context()
-		fmt.Printf("%+v\n", c)
+
+		err = c.SetWorkflow(args[0])
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Starting Workflow %s\n", c.Workflow.Name)
+
+		r := exec.NewResponder(c, os.Stdout)
+		r.Listen()
 	},
 }
 

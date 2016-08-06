@@ -20,11 +20,11 @@ type hclVariable struct {
 }
 
 type hclTask struct {
-	script string
+	Script string
 	Fields []string `hcl:",decodedFields"`
 }
 
-func LoadHclContext(file []byte) (*hclContext, error) {
+func LoadHclContext(file []byte) (contextual, error) {
 	t, err := hcl.ParseBytes(file)
 	if err != nil {
 		return nil, err
@@ -60,6 +60,7 @@ func (c *hclContext) Context() (*Context, error) {
 	if len(rawContext.Variable) > 0 {
 		ctx.Variables = make([]*Variable, 0, len(rawContext.Variable))
 
+		// TODO(ChrisMcKenzie): Variables should be interpolated
 		for k, v := range rawContext.Variable {
 			newVariable := &Variable{
 				Name:    k,
@@ -79,7 +80,7 @@ func (c *hclContext) Context() (*Context, error) {
 
 	if pipelines := list.Filter("pipeline"); len(pipelines.Items) > 0 {
 		var err error
-		ctx.Pipelines, err = loadPipelines(pipelines)
+		ctx.Pipelines, err = loadRootPipelines(pipelines, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +88,7 @@ func (c *hclContext) Context() (*Context, error) {
 
 	if workflows := list.Filter("workflow"); len(workflows.Items) > 0 {
 		var err error
-		ctx.Workflows, err = loadWorkflow(workflows)
+		ctx.Workflows, err = loadWorkflow(workflows, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +97,7 @@ func (c *hclContext) Context() (*Context, error) {
 	return ctx, nil
 }
 
-func loadPipelines(list *ast.ObjectList) ([]*Pipeline, error) {
+func loadPipelines(list *ast.ObjectList, wf *Workflow, ctx *Context) ([]*Pipeline, error) {
 	list = list.Children()
 	if len(list.Items) == 0 {
 		return nil, nil
@@ -110,20 +111,26 @@ func loadPipelines(list *ast.ObjectList) ([]*Pipeline, error) {
 
 	for _, item := range list.Items {
 		k := item.Keys[0].Token.Value().(string)
+		i := item.Val.(*ast.ObjectType).List
 
 		var pipeline = new(Pipeline)
-		if err := hcl.DecodeObject(&rawPipeline, item.Val); err != nil {
-			return nil, fmt.Errorf(
-				"Error reading config for %s: %s",
-				k,
-				err)
-		}
+		if p, ok := ctx.Pipelines[k]; ok {
+			pipeline = p
+		} else {
+			pipeline.Name = k
+			if err := hcl.DecodeObject(&rawPipeline, item.Val); err != nil {
+				return nil, fmt.Errorf(
+					"Error reading config for %s: %s",
+					k,
+					err)
+			}
 
-		if tasks := list.Filter("task"); len(tasks.Items) > 0 {
-			var err error
-			pipeline.Tasks, err = loadTasks(tasks)
-			if err != nil {
-				return nil, err
+			if tasks := i.Filter("task"); len(tasks.Items) > 0 {
+				var err error
+				pipeline.Tasks, err = loadPipelineTasks(tasks, wf, ctx)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -133,13 +140,92 @@ func loadPipelines(list *ast.ObjectList) ([]*Pipeline, error) {
 	return result, nil
 }
 
-func loadTasks(list *ast.ObjectList) ([]*Task, error) {
+func loadRootPipelines(list *ast.ObjectList, ctx *Context) (map[string]*Pipeline, error) {
+	list = list.Children()
+	if len(list.Items) == 0 {
+		return nil, nil
+	}
+
+	var result = make(map[string]*Pipeline)
+
+	var rawPipeline struct {
+		Task map[string]*hclTask
+	}
+
+	for _, item := range list.Items {
+		k := item.Keys[0].Token.Value().(string)
+		i := item.Val.(*ast.ObjectType).List
+
+		var pipeline = new(Pipeline)
+		pipeline.Name = k
+		if err := hcl.DecodeObject(&rawPipeline, item.Val); err != nil {
+			return nil, fmt.Errorf(
+				"Error reading config for %s: %s",
+				k,
+				err)
+		}
+
+		if tasks := i.Filter("task"); len(tasks.Items) > 0 {
+			var err error
+			pipeline.Tasks, err = loadPipelineTasks(tasks, new(Workflow), ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		result[k] = pipeline
+	}
+
+	return result, nil
+}
+
+func loadPipelineTasks(list *ast.ObjectList, wf *Workflow, ctx *Context) ([]*Task, error) {
 	list = list.Children()
 	if len(list.Items) == 0 {
 		return nil, nil
 	}
 
 	var result []*Task
+
+	for _, item := range list.Items {
+		k := item.Keys[0].Token.Value().(string)
+
+		var task = new(Task)
+		var rawTask *hclTask
+
+		if err := hcl.DecodeObject(&rawTask, item.Val); err != nil {
+			return nil, fmt.Errorf(
+				"Error reading config for %s: %s",
+				k,
+				err)
+		}
+
+		t, globalTaskExists := ctx.Tasks[k]
+		wfTask, wfTaskExists := wf.Tasks[k]
+
+		switch {
+		case rawTask.Script != "":
+			task.Name = k
+			task.Script = rawTask.Script
+		case wfTaskExists:
+			task = wfTask
+		case globalTaskExists:
+			task = t
+		}
+
+		result = append(result, task)
+	}
+
+	return result, nil
+}
+
+func loadTasks(list *ast.ObjectList) (map[string]*Task, error) {
+	list = list.Children()
+	if len(list.Items) == 0 {
+		return nil, nil
+	}
+
+	var result = make(map[string]*Task)
 
 	for _, item := range list.Items {
 		k := item.Keys[0].Token.Value().(string)
@@ -154,21 +240,21 @@ func loadTasks(list *ast.ObjectList) ([]*Task, error) {
 		}
 
 		task.Name = k
-		task.Script = &rawTask.script
+		task.Script = rawTask.Script
 
-		result = append(result, task)
+		result[k] = task
 	}
 
 	return result, nil
 }
 
-func loadWorkflow(list *ast.ObjectList) ([]*Context, error) {
+func loadWorkflow(list *ast.ObjectList, c *Context) (map[string]*Workflow, error) {
 	list = list.Children()
 	if len(list.Items) == 0 {
 		return nil, nil
 	}
 
-	var result []*Context
+	var result = make(map[string]*Workflow)
 
 	for _, item := range list.Items {
 		k := item.Keys[0].Token.Value().(string)
@@ -182,28 +268,36 @@ func loadWorkflow(list *ast.ObjectList) ([]*Context, error) {
 			return nil, err
 		}
 
-		ctx := new(Context)
+		ctx := new(Workflow)
 		ctx.Name = k
 		if len(rawContext.Variable) > 0 {
-			ctx.Variables = make([]*Variable, 0, len(rawContext.Variable))
+			ctx.Variables = make(map[string]*Variable)
 			for k, v := range rawContext.Variable {
 				newVariable := &Variable{
 					Name:    k,
 					Default: v.Default,
 				}
-				ctx.Variables = append(ctx.Variables, newVariable)
+				ctx.Variables[k] = newVariable
 			}
 		}
 
-		if pipelines := i.Filter("pipeline"); len(pipelines.Items) > 0 {
+		if tasks := i.Filter("task"); len(tasks.Items) > 0 {
 			var err error
-			ctx.Pipelines, err = loadPipelines(pipelines)
+			ctx.Tasks, err = loadTasks(tasks)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		result = append(result, ctx)
+		if pipelines := i.Filter("pipeline"); len(pipelines.Items) > 0 {
+			var err error
+			ctx.Pipelines, err = loadPipelines(pipelines, ctx, c)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		result[k] = ctx
 	}
 
 	return result, nil

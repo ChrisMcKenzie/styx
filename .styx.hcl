@@ -4,33 +4,36 @@ variable "binary-template" {
 
 task "go-get" {
   script = <<EOF
-  # do some bash stuf here
+# do some bash stuff here
 EOF
 }
 
 
 pipeline "build" {
-  task "npm-install" {}
+  task "npm-install" {
+    script = "npm install"
+  }
 }
 
 pipeline "test" {
-  task "npm-test" {}
+  task "npm-test" {
+    script = "npm test"
+  }
 }
 
 workflow "development" {
   task "cool-test" {
     script = "hello"
   }
+
   pipeline "build" {}
   pipeline "test" {}
 
-  pipeline "build-failed" {
-    requires {
-      test = "fail"
-    }
-
-    task "local-notification" {
-      message = "Local build failed on task: {{.Task}}"
+  pipeline "deploy" {
+    task "cool-test" {}
+    task "go-get" {}
+    task "go-get" {
+      script = "this is a pipeline local task"
     }
   }
 }
