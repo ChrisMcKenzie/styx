@@ -261,6 +261,7 @@ func loadWorkflow(list *ast.ObjectList, c *Context) (map[string]*Workflow, error
 		i := item.Val.(*ast.ObjectType).List
 
 		var rawContext struct {
+			Image    string
 			Variable map[string]*hclVariable
 			Task     map[string]*hclTask
 		}
@@ -270,6 +271,7 @@ func loadWorkflow(list *ast.ObjectList, c *Context) (map[string]*Workflow, error
 
 		ctx := new(Workflow)
 		ctx.Name = k
+		ctx.Image = rawContext.Image
 		if len(rawContext.Variable) > 0 {
 			ctx.Variables = make(map[string]*Variable)
 			for k, v := range rawContext.Variable {

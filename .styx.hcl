@@ -1,4 +1,6 @@
-variable "binary-template" {
+
+
+variable "my-template" {
   default = "${var.app_name}-${var.version}-${var.release}"
 }
 
@@ -22,6 +24,8 @@ pipeline "test" {
 }
 
 workflow "development" {
+  image = "node:latest"
+
   task "cool-test" {
     script = "hello"
   }

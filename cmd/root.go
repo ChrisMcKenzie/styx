@@ -41,7 +41,7 @@ var RootCmd = &cobra.Command{
 		fmt.Printf("Starting Workflow %s\n", c.Workflow.Name)
 
 		r := exec.NewResponder(c, os.Stdout)
-		r.Listen()
+		r.Exec()
 	},
 }
 

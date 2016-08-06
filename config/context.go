@@ -12,10 +12,12 @@ type Context struct {
 }
 
 type Workflow struct {
-	Name      string
-	Tasks     map[string]*Task
-	Variables map[string]*Variable
-	Pipelines []*Pipeline
+	Name        string
+	Image       string
+	Tasks       map[string]*Task
+	Variables   map[string]*Variable
+	Pipelines   []*Pipeline
+	ContainerId string
 }
 
 func (c *Context) SetWorkflow(name string) error {
