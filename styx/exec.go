@@ -1,3 +1,5 @@
 package styx
 
-type ExecService interface{}
+type ExecService interface {
+	Execute()
+}

@@ -24,8 +24,9 @@ pipeline "test" {
 workflow "development" {
   image = "node:latest"
 
-  driver "local" {
+  driver "docker" {
     home = "/tmp"
+    image = "ubuntu:14.04"
   }
 
   task "cool-test" {

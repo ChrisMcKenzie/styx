@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/ChrisMcKenzie/Styx/styx"
+	"github.com/ChrisMcKenzie/Styx/styx/docker"
+	"github.com/ChrisMcKenzie/Styx/styx/local"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
 )
@@ -266,7 +268,6 @@ func loadWorkflow(list *ast.ObjectList, c *styx.Context) (map[string]*styx.Workf
 		i := item.Val.(*ast.ObjectType).List
 
 		var rawContext struct {
-			Image    string
 			Variable map[string]*hclVariable
 			Task     map[string]*hclTask
 		}
@@ -276,7 +277,6 @@ func loadWorkflow(list *ast.ObjectList, c *styx.Context) (map[string]*styx.Workf
 
 		ctx := new(styx.Workflow)
 		ctx.Name = k
-		ctx.Image = rawContext.Image
 		if len(rawContext.Variable) > 0 {
 			ctx.Variables = make(map[string]*styx.Variable)
 			for k, v := range rawContext.Variable {
@@ -296,6 +296,14 @@ func loadWorkflow(list *ast.ObjectList, c *styx.Context) (map[string]*styx.Workf
 			}
 		}
 
+		if driver := i.Filter("driver"); len(driver.Items) > 0 {
+			var err error
+			ctx.Driver, err = parseDriver(driver)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		if pipelines := i.Filter("pipeline"); len(pipelines.Items) > 0 {
 			var err error
 			ctx.Pipelines, err = loadPipelines(pipelines, ctx, c)
@@ -308,4 +316,38 @@ func loadWorkflow(list *ast.ObjectList, c *styx.Context) (map[string]*styx.Workf
 	}
 
 	return result, nil
+}
+
+func parseDriver(list *ast.ObjectList) (styx.ExecService, error) {
+	list = list.Children()
+	if len(list.Items) == 0 {
+		return nil, nil
+	}
+
+	item := list.Items[0]
+	serviceName := item.Keys[0].Token.Value().(string)
+
+	var svc styx.ExecService
+	switch serviceName {
+	case "docker":
+		s := &docker.ExecService{}
+		if err := hcl.DecodeObject(s, item.Val); err != nil {
+			return nil, fmt.Errorf(
+				"Error reading driver config %s: %s",
+				serviceName,
+				err)
+		}
+		svc = s
+	case "local":
+		s := &local.ExecService{}
+		if err := hcl.DecodeObject(s, item.Val); err != nil {
+			return nil, fmt.Errorf(
+				"Error reading driver config %s: %s",
+				serviceName,
+				err)
+		}
+		svc = s
+	}
+
+	return svc, nil
 }
