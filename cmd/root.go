@@ -7,8 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/ChrisMcKenzie/Styx/config"
-	"github.com/ChrisMcKenzie/Styx/exec"
+	"github.com/ChrisMcKenzie/Styx/styx/hcl"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -31,7 +30,7 @@ var RootCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		ctx, err := config.LoadHclContext(file)
+		ctx, err := hcl.NewContextProvider(file)
 		c, _ := ctx.Context()
 
 		err = c.SetWorkflow(args[0])
@@ -39,9 +38,6 @@ var RootCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		fmt.Printf("Starting Workflow %s\n", c.Workflow.Name)
-
-		r := exec.NewResponder(c, os.Stdout)
-		r.Exec()
 	},
 }
 

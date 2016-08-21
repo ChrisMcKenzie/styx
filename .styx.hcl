@@ -1,5 +1,3 @@
-
-
 variable "my-template" {
   default = "${var.app_name}-${var.version}-${var.release}"
 }
@@ -25,6 +23,10 @@ pipeline "test" {
 
 workflow "development" {
   image = "node:latest"
+
+  driver "local" {
+    home = "/tmp"
+  }
 
   task "cool-test" {
     script = "hello"

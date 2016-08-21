@@ -1,19 +1,11 @@
-package config
+package styx
 
 import "fmt"
-
-type Context struct {
-	Name      string
-	Workflows map[string]*Workflow
-	Tasks     map[string]*Task
-	Pipelines map[string]*Pipeline
-	Variables []*Variable
-	Workflow  *Workflow
-}
 
 type Workflow struct {
 	Name        string
 	Image       string
+	Driver      map[string]interface{}
 	Tasks       map[string]*Task
 	Variables   map[string]*Variable
 	Pipelines   []*Pipeline
