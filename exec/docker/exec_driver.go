@@ -2,10 +2,10 @@ package docker
 
 import "fmt"
 
-type ExecService struct {
+type Provider struct {
 	Image string `hcl:"image"`
 }
 
-func (e *ExecService) Execute() {
+func (e *Provider) Execute() {
 	fmt.Printf("Execute called from docker using %s image\n", e.Image)
 }

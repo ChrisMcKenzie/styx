@@ -6,6 +6,7 @@ import (
 	"github.com/ChrisMcKenzie/Styx/styx"
 	"github.com/ChrisMcKenzie/Styx/styx/docker"
 	"github.com/ChrisMcKenzie/Styx/styx/local"
+	"github.com/ChrisMcKenzie/styx/exec"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
 )
@@ -327,10 +328,10 @@ func parseDriver(list *ast.ObjectList) (styx.ExecService, error) {
 	item := list.Items[0]
 	serviceName := item.Keys[0].Token.Value().(string)
 
-	var svc styx.ExecService
+	var svc exec.Provider
 	switch serviceName {
 	case "docker":
-		s := &docker.ExecService{}
+		s := &docker.Provider{}
 		if err := hcl.DecodeObject(s, item.Val); err != nil {
 			return nil, fmt.Errorf(
 				"Error reading driver config %s: %s",
@@ -339,7 +340,7 @@ func parseDriver(list *ast.ObjectList) (styx.ExecService, error) {
 		}
 		svc = s
 	case "local":
-		s := &local.ExecService{}
+		s := &local.Provider{}
 		if err := hcl.DecodeObject(s, item.Val); err != nil {
 			return nil, fmt.Errorf(
 				"Error reading driver config %s: %s",

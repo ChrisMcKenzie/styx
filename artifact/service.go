@@ -1,4 +1,4 @@
-package styx
+package artifact
 
 type Artifact struct {
 	// ...
